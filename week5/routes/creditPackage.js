@@ -1,19 +1,25 @@
 const express = require('express');
 
 const router = express.Router();
+const config = require('../config/index');
 const { dataSource } = require('../db/data-source');
 const logger = require('../utils/logger')('CreditPackage');
+const auth = require('../middlewares/auth')({
+    secret: config.get('secret').jwtSecret,
+    userRepository: dataSource.getRepository('User'),
+    logger
+});
 const valid = require('../config/valid');
 
 //取得購買方案列表
 router.get('/', async (req, res, next) => {
     try {
-        const packages = await appDataSource.getRepository("CreditPackage").find({
+        const creditPackage  = await dataSource.getRepository("CreditPackage").find({
           select: ["id", "name", "credit_amount", "price"]
         });
         res.status(200).json({
             status: 'success',
-            data: packages
+            data: creditPackage
         });
     } 
     catch (error) {
@@ -25,11 +31,12 @@ router.get('/', async (req, res, next) => {
 //新增購買方案
 router.post('/', async (req, res, next) => {
     try {
-        const { data } = req.body;
-    
-        if (valid.isUndefined(data.name) || valid.isNotValidSting(data.name) ||
-        valid.isUndefined(data.credit_amount) || valid.isNotValidInteger(data.credit_amount) ||
-        valid.isUndefined(data.price) || valid.isNotValidInteger(data.price)) {
+        //const { data } = req.body;
+        const { name, credit_amount: creditAmount, price } = req.body;
+
+        if (valid.isUndefined(name) || valid.isNotValidSting(name) ||
+        valid.isUndefined(creditAmount) || valid.isNotValidInteger(creditAmount) ||
+        valid.isUndefined(price) || valid.isNotValidInteger(price)) {
 
             res.status(400).json({
                 status: 'failed',
@@ -38,13 +45,13 @@ router.post('/', async (req, res, next) => {
             return;
         }
     
-        const creditPackageRepo = await appDataSource.getRepository("CreditPackage");
-        const existPackage = await creditPackageRepo.find({
+        const creditPackageRepo = dataSource.getRepository("CreditPackage");
+        const existCreditPackage = await creditPackageRepo.find({
           where: {
-            name: data.name
+            name
           }
         });
-        if (existPackage.length > 0) {
+        if (existCreditPackage.length > 0) {
             res.status(409).json({
                 status: 'failed',
                 message: '資料重複'
@@ -52,13 +59,13 @@ router.post('/', async (req, res, next) => {
             return;
         }
 
-        const newPackage = await creditPackageRepo.create({
-          name: data.name,
-          credit_amount: data.credit_amount,
-          price: data.price
+        const newCreditPurchase = await creditPackageRepo.create({
+          name,
+          credit_amount: creditAmount,
+          price
         });
 
-        const result = await creditPackageRepo.save(newPackage);
+        const result = await creditPackageRepo.save(newCreditPurchase);
         res.status(200).json({
             status: 'success',
             data: result
@@ -70,12 +77,50 @@ router.post('/', async (req, res, next) => {
       }
 });
 
+//使用者購買方案
+router.post('/:creditPackageId', auth, async (req, res, next) => {
+    try {
+      const { id } = req.user;
+      const { creditPackageId } = req.params;
+      const creditPackageRepo = dataSource.getRepository('CreditPackage');
+      const creditPackage = await creditPackageRepo.findOne({
+        where: {
+          id: creditPackageId
+        }
+      });
+      if (!creditPackage) {
+        res.status(400).json({
+          status: 'failed',
+          message: 'ID錯誤'
+        });
+        return;
+      }
+      const creditPurchaseRepo = dataSource.getRepository('CreditPurchase');
+      const newPurchase = await creditPurchaseRepo.create({
+        user_id: id,
+        credit_package_id: creditPackageId,
+        purchased_credits: creditPackage.credit_amount,
+        price_paid: creditPackage.price,
+        purchaseAt: new Date().toISOString()
+      });
+      await creditPurchaseRepo.save(newPurchase);
+      res.status(200).json({
+        status: 'success',
+        data: null
+      });
+    } 
+    catch (error) {
+      logger.error(error);
+      next(error);
+    }
+});
+
 //刪除購買方案
 router.delete('/:creditPackageId', async (req, res, next) => {
     try {
-        const packageId = req.url.split("/").pop();
+        const { creditPackageId } = req.params;
     
-        if (valid.isUndefined(packageId) || valid.isNotValidSting(packageId)) {
+        if (valid.isUndefined(creditPackageId) || valid.isNotValidSting(creditPackageId)) {
         
             res.status(400).json({
                 status: 'failed',
@@ -84,7 +129,7 @@ router.delete('/:creditPackageId', async (req, res, next) => {
             return;
         }
     
-        const result = await appDataSource.getRepository("CreditPackage").delete(packageId);
+        const result = await dataSource.getRepository("CreditPackage").delete(creditPackageId);
         if (result.affected === 0) {
             res.status(400).json({
                 status: 'failed',
@@ -94,7 +139,8 @@ router.delete('/:creditPackageId', async (req, res, next) => {
         }
     
         res.status(200).json({
-            status: 'success'
+            status: 'success',
+            data: result
         });
     } 
     catch (error) {
