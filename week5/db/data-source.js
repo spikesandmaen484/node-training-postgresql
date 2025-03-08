@@ -8,6 +8,7 @@ const Course = require('../entities/Course');
 const Coach = require('../entities/Coach');
 const CreditPurchase = require('../entities/CreditPurchase');
 const CourseBooking = require('../entities/CourseBooking');
+const CoachLinkSkill = require('../entities/CoachLinkSkill');
 
 const dataSource = new DataSource({
   type: 'postgres',
@@ -25,7 +26,8 @@ const dataSource = new DataSource({
     Course,
     Coach,
     CreditPurchase,
-    CourseBooking
+    CourseBooking,
+    CoachLinkSkill
   ],
   ssl: config.get('db.ssl')
 });

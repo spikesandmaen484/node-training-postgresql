@@ -10,6 +10,7 @@ const skillRouter = require('./routes/skill');
 const userRouter = require('./routes/user');
 const coachRouter = require('./routes/coach');
 const courseRouter = require('./routes/course');
+const uploadRouter = require('./routes/upload');
 
 const app = express();
 app.use(cors());
@@ -36,10 +37,18 @@ app.use('/api/users', userRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/coaches', coachRouter);
 app.use('/api/courses', courseRouter);
+app.use('/api/upload', uploadRouter);
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   req.log.error(err);
+  if (err.status) {
+    res.status(err.status).json({
+      status: 'failed',
+      message: err.message
+    });
+    return;
+  }
   res.status(500).json({
     status: 'error',
     message: '伺服器錯誤'
